@@ -14,7 +14,6 @@ import {
   useReactFlow,
   Node,
   Edge,
-  NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import ELK from "elkjs/lib/elk.bundled.js";
@@ -25,6 +24,7 @@ import {
   FULL_MAP,
   PARENT_MAP,
   GraphNodeData,
+  getSameChartIds,
 } from "./nodes-data";
 import { CHART_ICONS } from "./ChartIcons";
 
@@ -107,13 +107,14 @@ async function layoutVisibleGraph(
 /**
  * カスタムノードコンポーネント
  */
-function GraphNode({ id, data }: NodeProps<GraphNodeData>) {
+function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
   const canExpand = (data.childIds?.length ?? 0) > 0;
   const ChartIcon = data.isFinal ? CHART_ICONS[id] : null;
 
   // 状態に応じた配色
   const getBgColor = () => {
     if (data.isFinal && data.isSelected) return "linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)";
+    if (data.isFinal && data.isSameChart) return "linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)";
     if (data.isFinal) return "linear-gradient(135deg, #e8f5e9 0%, #dcedc8 100%)";
     if (data.isSelected) return "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)";
     return "linear-gradient(135deg, #ffffff 0%, #fafafa 100%)";
@@ -121,6 +122,7 @@ function GraphNode({ id, data }: NodeProps<GraphNodeData>) {
 
   const getBorderColor = () => {
     if (data.isFinal && data.isSelected) return "#28a745";
+    if (data.isFinal && data.isSameChart) return "#ff9800";
     if (data.isFinal) return "#81c784";
     if (data.isSelected) return "#1976d2";
     return "#e0e0e0";
@@ -177,24 +179,39 @@ function GraphNode({ id, data }: NodeProps<GraphNodeData>) {
               fontWeight: 700,
               fontSize: 14,
               lineHeight: 1.3,
-              color: "#1b5e20",
+              color: data.isSameChart ? "#e65100" : "#1b5e20",
             }}
           >
             {data.title?.replace("✅ ", "")}
           </div>
-          <span
-            style={{
-              fontSize: 10,
-              color: "#2e7d32",
-              fontWeight: 600,
-              background: "rgba(46, 125, 50, 0.15)",
-              padding: "2px 8px",
-              borderRadius: 4,
-              alignSelf: "flex-start",
-            }}
-          >
-            おすすめ
-          </span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: 10,
+                color: "#2e7d32",
+                fontWeight: 600,
+                background: "rgba(46, 125, 50, 0.15)",
+                padding: "2px 8px",
+                borderRadius: 4,
+              }}
+            >
+              おすすめ
+            </span>
+            {data.isSameChart && (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "#e65100",
+                  fontWeight: 600,
+                  background: "rgba(255, 152, 0, 0.2)",
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                }}
+              >
+                別の用途あり
+              </span>
+            )}
+          </div>
           <div
             style={{
               fontSize: 12,
@@ -292,44 +309,12 @@ function GraphNode({ id, data }: NodeProps<GraphNodeData>) {
           lineHeight: 1.45,
           color: "#444",
           display: "-webkit-box",
-          WebkitLineClamp: 3,
+          WebkitLineClamp: 4,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
         }}
       >
         {data.description ?? ""}
-      </div>
-
-      <div
-        style={{
-          marginTop: "auto",
-          display: "flex",
-          gap: 12,
-          fontSize: 11,
-          color: "#666",
-          fontWeight: 500,
-        }}
-      >
-        <span
-          style={{
-            background: "rgba(0,0,0,0.05)",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          Lv.{data.level ?? 0}
-        </span>
-        {canExpand && (
-          <span
-            style={{
-              background: "rgba(0,0,0,0.05)",
-              padding: "2px 6px",
-              borderRadius: 4,
-            }}
-          >
-            {data.childIds?.length ?? 0} 選択肢
-          </span>
-        )}
       </div>
     </div>
   );
@@ -376,6 +361,9 @@ function GraphChooserInner() {
         animated: true,
       }));
 
+      // 選択中のグラフと同じタイプのグラフIDを取得
+      const sameChartIds = finalId ? new Set(getSameChartIds(finalId)) : new Set<string>();
+
       const rfNodes: Node<GraphNodeData>[] = visible.nodes.map((n) => {
         const full = FULL_MAP.get(n.id)!;
         const p = pos.get(n.id) ?? { x: 0, y: 0 };
@@ -394,6 +382,7 @@ function GraphChooserInner() {
             level: n.level,
             isFinal: final,
             isSelected: selectedId === n.id,
+            isSameChart: sameChartIds.has(n.id),
           },
         };
       });
@@ -411,7 +400,7 @@ function GraphChooserInner() {
     return () => {
       cancelled = true;
     };
-  }, [visible, selectedId, setNodes, setEdges, expanded, fitView]);
+  }, [visible, selectedId, finalId, setNodes, setEdges, expanded, fitView]);
 
   // +/- toggle
   useEffect(() => {
@@ -616,6 +605,8 @@ function GraphChooserInner() {
             boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
           }}
           nodeColor={(node) => {
+            if (node.data?.isFinal && node.data?.isSelected) return "#28a745";
+            if (node.data?.isFinal && node.data?.isSameChart) return "#ff9800";
             if (node.data?.isFinal) return "#81c784";
             if (node.data?.isSelected) return "#64b5f6";
             return "#e0e0e0";

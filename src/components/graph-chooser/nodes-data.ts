@@ -8,6 +8,7 @@ export type GraphNodeData = {
   level?: number;
   isFinal?: boolean;
   isSelected?: boolean;
+  isSameChart?: boolean; // 選択中のグラフと同じグラフを指すノード
 };
 
 export type FullNode = {
@@ -302,8 +303,8 @@ export const FULL_NODES: FullNode[] = [
   {
     id: "ratio_hier_tree",
     data: {
-      title: "面積で比較したい",
-      description: "スペース効率重視・長方形で階層を表現",
+      title: "量の大きさも比較したい",
+      description: "面積で量を比較でき、スペース効率が良い",
       childIds: ["treemap"],
     },
   },
@@ -311,7 +312,7 @@ export const FULL_NODES: FullNode[] = [
     id: "ratio_hier_sunburst",
     data: {
       title: "階層構造を強調したい",
-      description: "中心から外側へ階層を展開・親子関係が明確",
+      description: "量の比較より親子関係の可視化を重視",
       childIds: ["sunburst"],
     },
   },
@@ -609,14 +610,14 @@ export const FULL_NODES: FullNode[] = [
     id: "treemap",
     data: {
       title: "✅ ツリーマップ",
-      description: "多カテゴリ/階層の割合を一目で",
+      description: "面積で量の大きさも比較できる・スペース効率が良い",
     },
   },
   {
     id: "sunburst",
     data: {
       title: "✅ サンバーストグラフ",
-      description: "階層構造を放射状に表現・親子関係が明確",
+      description: "階層構造を強調・量の比較より親子関係の可視化向き",
     },
   },
 
@@ -715,3 +716,26 @@ export const PARENT_MAP: Map<string, string> = (() => {
   }
   return m;
 })();
+
+// 同じチャートタイプをグループ化（異なるIDでも同じグラフを指す場合）
+export const CHART_GROUPS: Record<string, string> = {
+  // 100%積み上げ棒グラフ（時系列/比較/割合で使われる）
+  stack_100_bar_time: "stack_100_bar",
+  stack_100_bar: "stack_100_bar",
+  stack_100_bar_from_ratio: "stack_100_bar",
+  // 積み上げ棒グラフ（時系列/比較で使われる）
+  stack_bar_time: "stack_bar",
+  stack_bar: "stack_bar",
+  // 棒グラフ（時系列/比較で使われる）
+  bar_time: "bar",
+  bar: "bar",
+};
+
+// 選択されたチャートIDから、同じチャートを指す他のIDを取得
+export function getSameChartIds(chartId: string): string[] {
+  const group = CHART_GROUPS[chartId];
+  if (!group) return [];
+  return Object.entries(CHART_GROUPS)
+    .filter(([id, g]) => g === group && id !== chartId)
+    .map(([id]) => id);
+}

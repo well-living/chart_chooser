@@ -58,13 +58,15 @@ npm run dev
 
 ```
 src/
+  app/
+    page.tsx             # ページエントリーポイント
+    layout.tsx           # ルートレイアウト
+    globals.css          # グローバルスタイル
   components/
     graph-chooser/
       GraphChooser.tsx   # メインコンポーネント
       ChartIcons.tsx     # グラフのSVGアイコン
       nodes-data.ts      # フローチャートのデータ定義
-app/
-  page.tsx               # ページエントリーポイント
 ```
 
 ## ライセンス

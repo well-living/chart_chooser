@@ -23,6 +23,7 @@ import {
   FULL_NODES,
   FULL_MAP,
   PARENT_MAP,
+  CHART_GROUPS,
   GraphNodeData,
   getSameChartIds,
 } from "./nodes-data";
@@ -323,7 +324,7 @@ function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
 const nodeTypes = { graphNode: GraphNode };
 
 function GraphChooserInner() {
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter, getZoom } = useReactFlow();
   // 初期状態はrootのみ
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(["root"])
@@ -331,6 +332,9 @@ function GraphChooserInner() {
 
   const [selectedId, setSelectedId] = useState<string>("root");
   const [finalId, setFinalId] = useState<string | null>(null);
+
+  // レイアウト変更がexpanded起因かselection起因かを区別
+  const [needsFitView, setNeedsFitView] = useState(true);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>(
     []
@@ -390,17 +394,34 @@ function GraphChooserInner() {
       setNodes(rfNodes);
       setEdges(rfEdges);
 
-      // レイアウト変更後にビューをフィット
-      setTimeout(() => {
-        fitView({ padding: 0.25, duration: 300 });
-      }, 50);
+      // expanded変更時のみビュー全体をフィット、選択のみの変更時はフォーカス維持
+      if (needsFitView) {
+        setTimeout(() => {
+          fitView({ padding: 0.25, duration: 300 });
+        }, 50);
+        setNeedsFitView(false);
+      } else {
+        // 選択ノードの位置にセンタリング（ズームレベル維持）
+        const selectedPos = pos.get(selectedId);
+        if (selectedPos) {
+          const NODE_W = 280;
+          const NODE_H = isFinalNode(selectedId) ? 150 : 130;
+          setTimeout(() => {
+            setCenter(
+              selectedPos.x + NODE_W / 2,
+              selectedPos.y + NODE_H / 2,
+              { zoom: getZoom(), duration: 300 }
+            );
+          }, 50);
+        }
+      }
     };
 
     runLayout();
     return () => {
       cancelled = true;
     };
-  }, [visible, selectedId, finalId, setNodes, setEdges, expanded, fitView]);
+  }, [visible, selectedId, finalId, setNodes, setEdges, expanded, fitView, needsFitView, setCenter, getZoom]);
 
   // +/- toggle
   useEffect(() => {
@@ -417,6 +438,7 @@ function GraphChooserInner() {
         next.add("root");
         return next;
       });
+      setNeedsFitView(true);
     };
 
     window.addEventListener("toggle-node", handler as any);
@@ -459,6 +481,58 @@ function GraphChooserInner() {
   const finalTitle = finalId ? FULL_MAP.get(finalId)?.data.title : null;
   const finalDesc = finalId ? FULL_MAP.get(finalId)?.data.description : null;
 
+  // ドロップダウン用: 全最終ノードのリスト（重複排除）
+  const dropdownOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ label: string; ids: string[] }> = [];
+    for (const n of FULL_NODES) {
+      if (!isFinalNode(n.id)) continue;
+      const group = CHART_GROUPS[n.id];
+      const key = group ?? n.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // このグループに属する全ID
+      const ids = group
+        ? Object.entries(CHART_GROUPS).filter(([, g]) => g === group).map(([id]) => id)
+        : [n.id];
+      const label = n.data.title.replace("✅ ", "");
+      options.push({ label, ids });
+    }
+    return options.sort((a, b) => a.label.localeCompare(b.label, "ja"));
+  }, []);
+
+  // ドロップダウン選択ハンドラ
+  const handleDropdownSelect = (value: string) => {
+    if (!value) return;
+    const option = dropdownOptions.find((o) => o.ids[0] === value);
+    if (!option) return;
+
+    const allIds = option.ids;
+    // 同名グラフIDも追加
+    for (const id of [...allIds]) {
+      for (const sameId of getSameChartIds(id)) {
+        if (!allIds.includes(sameId)) allIds.push(sameId);
+      }
+    }
+
+    // 全IDの祖先を集めて展開セットを作成
+    const ancestorSet = new Set<string>(["root"]);
+    for (const id of allIds) {
+      let cur: string | undefined = id;
+      while (cur) {
+        ancestorSet.add(cur);
+        const parent = PARENT_MAP.get(cur);
+        if (!parent) break;
+        cur = parent;
+      }
+    }
+
+    setExpanded(ancestorSet);
+    setSelectedId(allIds[0]);
+    setFinalId(allIds[0]);
+    setNeedsFitView(true);
+  };
+
   return (
     <div style={{ width: "100%", height: "100vh", background: "#f8fafc" }}>
       {/* 上部バー */}
@@ -491,7 +565,7 @@ function GraphChooserInner() {
           }}
         >
           <span style={{ fontSize: 20 }}>📊</span>
-          グラフ選択ガイド
+          グラフの選び方ガイド
         </div>
 
         {finalId ? (
@@ -515,15 +589,34 @@ function GraphChooserInner() {
           <div
             style={{
               fontSize: 13,
-              color: "#555",
-              background: "#f5f5f5",
-              padding: "8px 12px",
-              borderRadius: 8,
+              color: "#999",
             }}
           >
             ノードをクリックして選択を進めると、おすすめグラフが表示されます
           </div>
         )}
+
+        <select
+          value={finalId ?? ""}
+          onChange={(e) => handleDropdownSelect(e.target.value)}
+          style={{
+            padding: "7px 12px",
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            background: "#fff",
+            fontSize: 13,
+            color: "#333",
+            cursor: "pointer",
+            minWidth: 180,
+          }}
+        >
+          <option value="">グラフ名から選ぶ...</option>
+          {dropdownOptions.map((opt) => (
+            <option key={opt.ids[0]} value={opt.ids[0]}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
 
         <div
           style={{
@@ -537,6 +630,7 @@ function GraphChooserInner() {
               // 全ノードIDを取得して展開
               const allIds = new Set(FULL_NODES.map((n) => n.id));
               setExpanded(allIds);
+              setNeedsFitView(true);
             }}
             style={{
               padding: "7px 14px",
@@ -558,6 +652,7 @@ function GraphChooserInner() {
               setExpanded(new Set(["root"]));
               setSelectedId("root");
               setFinalId(null);
+              setNeedsFitView(true);
             }}
             style={{
               padding: "7px 14px",

@@ -1,4 +1,4 @@
-# Chart Chooser - グラフ選択ガイド
+# Chart Chooser - グラフの選び方ガイド
 
 データ可視化に最適なグラフを選ぶためのインタラクティブなフローチャートツールです。
 
@@ -45,6 +45,7 @@ npm run dev
 
 ### 便利な機能
 
+- **グラフ名ドロップダウン**: ヘッダーのドロップダウンからグラフ名を直接選択すると、そのグラフに至るツリーのみが展開されます。複数の用途を持つグラフ（例: 積み上げ棒グラフ）を選ぶと、すべてのパスが同時に展開されます
 - **全展開ボタン**: すべてのノードを一度に展開して全体像を把握
 - **リセットボタン**: 最初からやり直し
 - **同一チャートのハイライト**: グラフを選択すると、同じグラフが他の目的でも使われている場合はオレンジ色でハイライト表示されます（例: 100%積み上げ棒グラフは時系列・比較・割合の各目的で使用可能）
@@ -68,6 +69,33 @@ src/
       ChartIcons.tsx     # グラフのSVGアイコン
       nodes-data.ts      # フローチャートのデータ定義
 ```
+
+## デプロイ (Google Cloud Run)
+
+```powershell
+# Windows (PowerShell)
+.\deploy.ps1
+
+# macOS / Linux (bash / zsh)
+./deploy.sh
+```
+
+内部で以下の2ステップを実行します:
+
+1. `gcloud builds submit` - Cloud Build 上で Docker イメージをビルド＆プッシュ
+2. `gcloud run deploy --image` - ビルド済みイメージを Cloud Run にデプロイ
+
+### デプロイ構成ファイル
+
+| ファイル | 役割 |
+|---|---|
+| `deploy.ps1` | デプロイスクリプト（Windows / PowerShell） |
+| `deploy.sh` | デプロイスクリプト（macOS・Linux / bash・zsh） |
+| `Dockerfile` | マルチステージビルド（deps → build → runner） |
+| `cloudbuild.yaml` | Cloud Build の設定（`gcr.io/cloud-builders/docker` + BuildKit 有効） |
+| `.dockerignore` | Docker ビルドコンテキストからの除外設定 |
+| `.gcloudignore` | `gcloud` アップロード時の除外設定 |
+
 
 ## ライセンス
 

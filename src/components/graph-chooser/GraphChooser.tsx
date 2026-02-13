@@ -28,6 +28,7 @@ import {
   getSameChartIds,
 } from "./nodes-data";
 import { CHART_ICONS } from "./ChartIcons";
+import { LanguageProvider, useLanguage } from "./LanguageContext";
 
 const elk = new ELK();
 
@@ -109,6 +110,7 @@ async function layoutVisibleGraph(
  * カスタムノードコンポーネント
  */
 function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
+  const { t } = useLanguage();
   const canExpand = (data.childIds?.length ?? 0) > 0;
   const ChartIcon = data.isFinal ? CHART_ICONS[id] : null;
 
@@ -152,7 +154,7 @@ function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
           cursor: "pointer",
           transition: "all 0.2s ease",
         }}
-        title="クリックして選択"
+        title={t("tooltip_click_select")}
       >
         <Handle type="target" position={Position.Left} style={{ background: "#666" }} />
         <Handle type="target" position={Position.Top} style={{ background: "#666" }} />
@@ -196,7 +198,7 @@ function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
                 borderRadius: 4,
               }}
             >
-              おすすめ
+              {t("badge_recommended")}
             </span>
             {data.isSameChart && (
               <span
@@ -209,7 +211,7 @@ function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
                   borderRadius: 4,
                 }}
               >
-                別の用途あり
+                {t("badge_same_chart")}
               </span>
             )}
           </div>
@@ -251,7 +253,7 @@ function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
         cursor: "pointer",
         transition: "all 0.2s ease",
       }}
-      title="クリックして選択"
+      title={t("tooltip_click_select")}
     >
       <Handle type="target" position={Position.Left} style={{ background: "#666" }} />
       <Handle type="source" position={Position.Right} style={{ background: "#666" }} />
@@ -297,7 +299,7 @@ function GraphNode({ id, data }: { id: string; data: GraphNodeData }) {
               whiteSpace: "nowrap",
               transition: "all 0.15s ease",
             }}
-            title={data.isExpanded ? "折りたたむ" : "展開する"}
+            title={data.isExpanded ? t("tooltip_collapse") : t("tooltip_expand")}
           >
             {data.isExpanded ? "−" : "+"}
           </button>
@@ -325,6 +327,8 @@ const nodeTypes = { graphNode: GraphNode };
 
 function GraphChooserInner() {
   const { fitView, setCenter, getZoom } = useReactFlow();
+  const { lang, toggleLang, t, nodeTitle, nodeDesc } = useLanguage();
+
   // 初期状態はrootのみ
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(["root"])
@@ -379,8 +383,8 @@ function GraphChooserInner() {
           type: "graphNode",
           position: { x: p.x, y: p.y },
           data: {
-            title: full.data.title,
-            description: full.data.description,
+            title: nodeTitle(n.id),
+            description: nodeDesc(n.id),
             childIds: kids,
             isExpanded: expanded.has(n.id),
             level: n.level,
@@ -421,7 +425,7 @@ function GraphChooserInner() {
     return () => {
       cancelled = true;
     };
-  }, [visible, selectedId, finalId, setNodes, setEdges, expanded, fitView, needsFitView, setCenter, getZoom]);
+  }, [visible, selectedId, finalId, setNodes, setEdges, expanded, fitView, needsFitView, setCenter, getZoom, nodeTitle, nodeDesc]);
 
   // +/- toggle
   useEffect(() => {
@@ -478,8 +482,8 @@ function GraphChooserInner() {
     return () => window.removeEventListener("select-node", handler as any);
   }, []);
 
-  const finalTitle = finalId ? FULL_MAP.get(finalId)?.data.title : null;
-  const finalDesc = finalId ? FULL_MAP.get(finalId)?.data.description : null;
+  const finalTitle = finalId ? nodeTitle(finalId) : null;
+  const finalDesc = finalId ? nodeDesc(finalId) : null;
 
   // ドロップダウン用: 全最終ノードのリスト（重複排除）
   const dropdownOptions = useMemo(() => {
@@ -495,11 +499,11 @@ function GraphChooserInner() {
       const ids = group
         ? Object.entries(CHART_GROUPS).filter(([, g]) => g === group).map(([id]) => id)
         : [n.id];
-      const label = n.data.title.replace("✅ ", "");
+      const label = nodeTitle(n.id).replace("✅ ", "");
       options.push({ label, ids });
     }
-    return options.sort((a, b) => a.label.localeCompare(b.label, "ja"));
-  }, []);
+    return options.sort((a, b) => a.label.localeCompare(b.label, lang === "ja" ? "ja" : "en"));
+  }, [nodeTitle, lang]);
 
   // ドロップダウン選択ハンドラ
   const handleDropdownSelect = (value: string) => {
@@ -565,7 +569,7 @@ function GraphChooserInner() {
           }}
         >
           <span style={{ fontSize: 20 }}>📊</span>
-          グラフの選び方ガイド
+          {t("header_title")}
         </div>
 
         {finalId ? (
@@ -592,7 +596,7 @@ function GraphChooserInner() {
               color: "#999",
             }}
           >
-            ノードをクリックして選択を進めると、おすすめグラフが表示されます
+            {t("hint_select")}
           </div>
         )}
 
@@ -610,7 +614,7 @@ function GraphChooserInner() {
             minWidth: 180,
           }}
         >
-          <option value="">グラフ名から選ぶ...</option>
+          <option value="">{t("dropdown_placeholder")}</option>
           {dropdownOptions.map((opt) => (
             <option key={opt.ids[0]} value={opt.ids[0]}>
               {opt.label}
@@ -625,6 +629,25 @@ function GraphChooserInner() {
             gap: 8,
           }}
         >
+          {/* 言語切り替えボタン */}
+          <button
+            onClick={toggleLang}
+            style={{
+              padding: "5px 10px",
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              background: "#fafafa",
+              color: "#666",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 12,
+              transition: "all 0.15s ease",
+              letterSpacing: 0.5,
+            }}
+            title={lang === "ja" ? "Switch to English" : "日本語に切り替え"}
+          >
+            {lang === "ja" ? "EN" : "JA"}
+          </button>
           <button
             onClick={() => {
               // 全ノードIDを取得して展開
@@ -643,9 +666,9 @@ function GraphChooserInner() {
               fontSize: 13,
               transition: "all 0.15s ease",
             }}
-            title="全展開"
+            title={t("btn_expand_all")}
           >
-            全展開
+            {t("btn_expand_all")}
           </button>
           <button
             onClick={() => {
@@ -665,9 +688,9 @@ function GraphChooserInner() {
               fontSize: 13,
               transition: "all 0.15s ease",
             }}
-            title="リセット"
+            title={t("btn_reset")}
           >
-            リセット
+            {t("btn_reset")}
           </button>
         </div>
       </div>
@@ -714,8 +737,10 @@ function GraphChooserInner() {
 
 export default function GraphChooser() {
   return (
-    <ReactFlowProvider>
-      <GraphChooserInner />
-    </ReactFlowProvider>
+    <LanguageProvider>
+      <ReactFlowProvider>
+        <GraphChooserInner />
+      </ReactFlowProvider>
+    </LanguageProvider>
   );
 }

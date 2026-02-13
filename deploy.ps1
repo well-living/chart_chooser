@@ -1,4 +1,4 @@
-# Cloud Run デプロイスクリプト
+﻿# Cloud Run デプロイスクリプト
 # 使い方: .\deploy.ps1
 
 param(
